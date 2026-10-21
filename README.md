@@ -1,7 +1,6 @@
 # Daily weather email
 
-Get tomorrow's rain, wind, and severe-weather forecast by email, sent from your Gmail address to that same address. Your Android phone or iPhone supplies the location. Each email shows the town/city name, or county when available.
-
+Get tomorrow's rain, wind, and severe-weather forecast by email, sent from your Gmail address to that same address. Your Android phone or iPhone supplies the location the evening before.
 ## Install
 
 You need a GitHub account, a Gmail account that supports app passwords, and either an Android phone with [Automate](https://llamalab.com/automate/) or an iPhone with Apple Shortcuts. No server or Python installation is needed.
