@@ -1,6 +1,6 @@
 # Daily weather email
 
-Get tomorrow's rain, wind, and severe-weather forecast by email, sent **from your Gmail address to that same address**. Your Android phone supplies the location. Each email shows the town/city name, or county when available.
+Get tomorrow's rain, wind, and severe-weather forecast by email, sent from your Gmail address to that same address. Your Android phone supplies the location. Each email shows the town/city name, or county when available.
 
 ## Install
 
