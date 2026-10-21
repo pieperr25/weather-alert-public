@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+coords.json
+weather_alert.log
+.env
+.env.*
+*.env
+!weather_alert.env.example
+*.env.local
+.venv/
+.DS_Store

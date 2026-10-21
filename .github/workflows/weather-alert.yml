@@ -1,0 +1,232 @@
+name: Daily next-day weather alert
+
+on:
+  schedule:
+    # Run at :30 in every UTC hour. The Python program exits unless the weather
+    # provider's timezone for the latest coordinates is currently 18:xx.
+    - cron: "30 * * * *"
+  workflow_dispatch:
+    inputs:
+      send_test_email:
+        description: "Send a test email without evaluating the forecast"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: daily-weather-alert
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  weather-alert:
+    # Each installer runs their own copy in a private repository.
+    if: ${{ github.event.repository.private == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+
+      - name: Materialize latest phone coordinates
+        env:
+          COORDS_JSON: ${{ vars.COORDS_JSON }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          value = os.environ.get("COORDS_JSON", "")
+          document = json.loads(value)
+          if not isinstance(document, dict):
+              raise SystemExit(1)
+          Path("coords.json").write_text(json.dumps(document), encoding="utf-8")
+          PY
+
+      - name: Run unit tests
+        run: python -m unittest -q test_weather_alert.py
+
+      - name: Send requested test email
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.send_test_email }}
+        env:
+          SMTP_HOST: "smtp.gmail.com"
+          SMTP_PORT: "587"
+          SMTP_TIMEOUT_SECONDS: "60"
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          SMTP_TO: ${{ secrets.SMTP_TO }}
+          SMTP_STARTTLS: "true"
+          SMTP_USE_SSL: "false"
+        run: |
+          python - <<'PY'
+          from datetime import date
+
+          from weather_alert import load_smtp_config, send_alert
+
+          send_alert(
+              load_smtp_config(),
+              date.today(),
+              "This is a test of your automated next-day weather alert email.\n\n"
+              "The GitHub Actions workflow and Gmail SMTP delivery are working.\n",
+          )
+          PY
+
+      - name: Evaluate forecast and send when triggered
+        id: evaluate
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.send_test_email }}
+        env:
+          RUN_ONLY_AT_LOCAL_HOUR: "18"
+          WEATHER_ALERT_REPORT_ERRORS: "true"
+          WEATHER_ALERT_EVALUATION_DATE_FILE: ${{ runner.temp }}/weather-alert-evaluation-date
+          # Keep using the last location the phone successfully reported. A
+          # missed phone update must not suppress the nightly weather check.
+          NWS_USER_AGENT: ${{ secrets.NWS_USER_AGENT }}
+          SMTP_HOST: "smtp.gmail.com"
+          SMTP_PORT: "587"
+          SMTP_TIMEOUT_SECONDS: "60"
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          SMTP_TO: ${{ secrets.SMTP_TO }}
+          SMTP_STARTTLS: "true"
+          SMTP_USE_SSL: "false"
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          last_evaluated_date="$(
+            gh api -X GET \
+              "repos/${GITHUB_REPOSITORY}/actions/artifacts" \
+              -f per_page=100 \
+              --jq '.artifacts[] | select((.expired | not) and (.name | startswith("weather-alert-evaluated-"))) | .name' \
+              | sed -nE 's/^weather-alert-evaluated-([0-9]{4}-[0-9]{2}-[0-9]{2})$/\1/p' \
+              | sort \
+              | tail -n 1
+          )"
+          export LAST_EVALUATED_LOCAL_DATE="$last_evaluated_date"
+
+          set +e
+          python weather_alert.py
+          evaluation_status=$?
+          set -e
+
+          marker_file="$WEATHER_ALERT_EVALUATION_DATE_FILE"
+          if [[ ! -f "$marker_file" ]]; then
+            exit "$evaluation_status"
+          fi
+          IFS= read -r evaluation_date < "$marker_file"
+          if [[ ! "$evaluation_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+            echo "Invalid evaluation date marker" >&2
+            exit 1
+          fi
+          echo "evaluation_date=$evaluation_date" >> "$GITHUB_OUTPUT"
+          exit "$evaluation_status"
+
+      - name: Save completed local date
+        if: ${{ always() && steps.evaluate.outputs.evaluation_date != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: weather-alert-evaluated-${{ steps.evaluate.outputs.evaluation_date }}
+          path: ${{ runner.temp }}/weather-alert-evaluation-date
+          if-no-files-found: error
+          retention-days: 7
+
+  notify-failure:
+    name: Email workflow failure
+    needs: weather-alert
+    if: ${{ always() && (needs['weather-alert'].result == 'failure' || needs['weather-alert'].result == 'cancelled') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      SMTP_HOST: "smtp.gmail.com"
+      SMTP_PORT: "587"
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      SMTP_FROM: ${{ secrets.SMTP_FROM }}
+      SMTP_TO: ${{ secrets.SMTP_TO }}
+      FAILED_JOB_RESULT: ${{ needs['weather-alert'].result }}
+    steps:
+      # Keep this sender self-contained. It must still work when checkout,
+      # Python setup, the application import, or the test suite has failed.
+      - name: Send fallback error email
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os
+          import smtplib
+          import ssl
+          import time
+          from datetime import datetime, timezone
+          from email.message import EmailMessage
+          from email.utils import make_msgid
+
+          def required(name):
+              value = os.environ.get(name, "").strip()
+              if not value:
+                  raise RuntimeError(f"Required email setting {name} is missing")
+              return value
+
+          host = required("SMTP_HOST")
+          port = int(required("SMTP_PORT"))
+          username = required("SMTP_USERNAME")
+          password = required("SMTP_PASSWORD")
+          sender = required("SMTP_FROM")
+          recipients = [
+              address.strip()
+              for address in required("SMTP_TO").split(",")
+              if address.strip()
+          ]
+          if not recipients:
+              raise RuntimeError("SMTP_TO contains no email addresses")
+
+          repository = os.environ.get("GITHUB_REPOSITORY", "unknown repository")
+          workflow = os.environ.get("GITHUB_WORKFLOW", "weather alert workflow")
+          result = os.environ.get("FAILED_JOB_RESULT", "failed")
+          run_url = (
+              f"{os.environ.get('GITHUB_SERVER_URL', 'https://github.com')}/"
+              f"{repository}/actions/runs/{os.environ.get('GITHUB_RUN_ID', '')}"
+          )
+          timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+          message = EmailMessage()
+          message["Subject"] = "ERROR: Daily weather alert workflow failed"
+          message["From"] = sender
+          message["To"] = ", ".join(recipients)
+          message["Message-ID"] = make_msgid()
+          message.set_content(
+              "The daily weather alert did not complete successfully.\n\n"
+              "This message is independent of tomorrow's rain forecast. Do not "
+              "interpret the absence of a weather alert as a no-rain result for "
+              "this run.\n\n"
+              f"Repository: {repository}\n"
+              f"Workflow: {workflow}\n"
+              f"Job result: {result}\n"
+              f"Detected: {timestamp}\n"
+              f"Run details: {run_url}\n"
+          )
+
+          context = ssl.create_default_context()
+          for attempt in range(2):
+              transfer_started = False
+              try:
+                  with smtplib.SMTP(host, port, timeout=60) as smtp:
+                      smtp.ehlo()
+                      smtp.starttls(context=context)
+                      smtp.ehlo()
+                      smtp.login(username, password)
+                      transfer_started = True
+                      smtp.send_message(message, from_addr=sender, to_addrs=recipients)
+                  break
+              except (OSError, smtplib.SMTPException):
+                  if transfer_started or attempt == 1:
+                      raise
+                  time.sleep(2)
+          PY
