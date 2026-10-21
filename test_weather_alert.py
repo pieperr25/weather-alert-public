@@ -1,4 +1,5 @@
 import os
+import json
 import io
 import unittest
 from contextlib import redirect_stderr
@@ -291,6 +292,38 @@ class HttpSecurityTests(unittest.TestCase):
 
 
 class CoordinateTests(unittest.TestCase):
+    def test_loads_shortcuts_coordinates_with_iso8601_timezone(self):
+        # Shortcuts sends a JSON dictionary serialized into the GitHub
+        # variable's text value, with Format Date set to ISO 8601.
+        for timestamp in (
+            "2026-08-08T18:15:00-05:00",
+            "2026-08-09T01:15:00+02:00",
+            "2026-08-08T23:15:00Z",
+        ):
+            with self.subTest(timestamp=timestamp), TemporaryDirectory() as directory:
+                request_body = {
+                    "name": "COORDS_JSON",
+                    "value": json.dumps({
+                        "latitude": 40.123,
+                        "longitude": -100.456,
+                        "updated_at": timestamp,
+                    }),
+                }
+                path = Path(directory, "coords.json")
+                path.write_text(request_body["value"], encoding="utf-8")
+                coordinates = load_coordinates(path)
+                self.assertEqual(coordinates.latitude, 40.123)
+                self.assertEqual(coordinates.longitude, -100.456)
+                self.assertEqual(
+                    coordinates.updated_at,
+                    datetime(2026, 8, 8, 23, 15, tzinfo=timezone.utc),
+                )
+                validate_coordinate_freshness(
+                    coordinates,
+                    datetime(2026, 8, 8, 23, 30, tzinfo=timezone.utc),
+                    max_age_hours=3,
+                )
+
     def test_loads_phone_timestamp_and_accepts_fresh_coordinates(self):
         with TemporaryDirectory() as directory:
             path = Path(directory, "coords.json")

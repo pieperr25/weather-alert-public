@@ -1,10 +1,10 @@
 # Daily weather email
 
-Get tomorrow's rain, wind, and severe-weather forecast by email, sent from your Gmail address to that same address. Your Android phone supplies the location. Each email shows the town/city name, or county when available.
+Get tomorrow's rain, wind, and severe-weather forecast by email, sent from your Gmail address to that same address. Your Android phone or iPhone supplies the location. Each email shows the town/city name, or county when available.
 
 ## Install
 
-You need a GitHub account, an Android phone with [Automate](https://llamalab.com/automate/), and a Gmail account that supports app passwords. No server or Python installation is needed.
+You need a GitHub account, a Gmail account that supports app passwords, and either an Android phone with [Automate](https://llamalab.com/automate/) or an iPhone with Apple Shortcuts. No server or Python installation is needed.
 
 ### 1. Make your private copy
 
@@ -38,13 +38,18 @@ Replace the sample coordinates with your location and the timestamp with the cur
 
 ### 4. Connect your phone
 
-Follow [Android setup](ANDROID_SETUP.md) to send your location to **your private repository** every day at 18:15. Run the phone flow once and confirm HTTP status `204` before continuing.
+Choose your phone:
+
+- **Android:** follow [Android setup](ANDROID_SETUP.md) using Automate.
+- **iPhone:** follow [iPhone setup](IPHONE_SETUP.md) using Apple Shortcuts.
+
+Both send your location to **your private repository** daily at 18:15. Run the phone automation once and confirm `COORDS_JSON` updates before continuing. Use one phone per repository; if two phones update the same copy, the last update wins.
 
 ### 5. Test your email
 
 In your private repository, open **Actions → Daily next-day weather alert → Run workflow**. Check **Send a test email without evaluating the forecast**, then run it. Check your inbox and spam folder. This test sends an email regardless of the weather or time of day.
 
-Leave the phone flow running. GitHub checks hourly and evaluates tomorrow's forecast on the first run at or after 18:00 in the location's time zone; scheduled runs may be delayed. An email is sent when the rain, sustained-wind, or severe-outlook rules trigger. Workflow failures attempt to send a separate error email using the same Gmail account. If Gmail or its credentials fail, check the Actions page instead.
+Leave the phone automation enabled. GitHub checks hourly and evaluates tomorrow's forecast on the first run at or after 18:00 in the location's time zone; scheduled runs may be delayed. An email is sent when the rain, sustained-wind, or severe-outlook rules trigger. Workflow failures attempt to send a separate error email using the same Gmail account. If Gmail or its credentials fail, check the Actions page instead.
 
 ## What to expect
 
@@ -52,6 +57,6 @@ Tomorrow's 06:00–19:00 forecast triggers for any hour with at least 50% rain p
 
 Your copy, settings, and workflow logs stay in your private GitHub repository, accessible to you and anyone you grant access. GitHub runs the checks; this does not run entirely on your phone. Forecast and location services receive location queries, and Gmail handles the emails. No data is sent to this template's maintainer. Keep your copy private and keep tokens, location files, and credentials out of commits and shared phone-flow exports.
 
-To pause emails, disable **Daily next-day weather alert** from its Actions menu. To uninstall, stop the phone flow, revoke its GitHub token and Google app password, and delete your private repository if desired.
+To pause emails, disable **Daily next-day weather alert** from its Actions menu. To uninstall, disable the phone automation, revoke its GitHub token and Google app password, and delete your private repository if desired.
 
 For development: Python 3.10+ with no third-party dependencies; run `python3 -m unittest -v test_weather_alert.py`.
