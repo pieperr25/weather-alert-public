@@ -1,9 +1,9 @@
 # Daily weather email
 
-Get tomorrow's rain, wind, and severe-weather forecast by email, sent from your Gmail address to that same address. Your Android phone or iPhone supplies the location the evening before.
+Get tomorrow's rain, wind, and severe-weather forecast by email, sent to your email address. Your Android phone or iPhone supplies the location the evening before.
 ## Install
 
-You need a GitHub account, a Gmail account that supports app passwords, and either an Android phone with [Automate](https://llamalab.com/automate/) or an iPhone with Apple Shortcuts. No server or Python installation is needed.
+You need a GitHub account, a Gmail account that supports app passwords for sending, an email address for receiving alerts (any provider), and either an Android phone with [Automate](https://llamalab.com/automate/) or an iPhone with Apple Shortcuts. No server or Python installation is needed.
 
 ### 1. Make your private copy
 
@@ -11,7 +11,9 @@ On this repository, choose **Use this template → Create a new repository**. Ch
 
 All remaining steps happen in **your private copy**. The email workflow only runs in private repositories. If Actions is disabled, enable it under the repository's **Actions** tab.
 
-### 2. Connect your Gmail
+### 2. Connect your email
+
+The included workflow sends through Gmail. Your receiving email can use any provider and can be the same as or different from the sending address.
 
 Enable Google [2-Step Verification and create an app password](https://support.google.com/accounts/answer/185833) for this app. Use the app password, not your regular Gmail password. If Google does not offer app passwords for your account, you need an eligible account.
 
@@ -22,7 +24,7 @@ In your private repository, open **Settings → Secrets and variables → Action
 | `SMTP_USERNAME` | Your Gmail address |
 | `SMTP_PASSWORD` | Your Google app password (omit spaces) |
 | `SMTP_FROM` | The same Gmail address |
-| `SMTP_TO` | The same Gmail address |
+| `SMTP_TO` | Your receiving email address (any provider) |
 | `NWS_USER_AGENT` | `daily-weather-alert/1.0 (you@example.com)`, replacing the example with your email |
 
 ### 3. Set your starting location
