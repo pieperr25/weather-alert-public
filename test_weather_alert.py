@@ -2,6 +2,7 @@ import os
 import json
 import io
 import unittest
+import textwrap
 from contextlib import redirect_stderr
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -941,6 +942,36 @@ class ReliabilityTests(unittest.TestCase):
 
         load_smtp.assert_not_called()
         send.assert_not_called()
+
+
+
+
+class WorkflowEmailTests(unittest.TestCase):
+    def test_failure_notifier_uses_configured_smtp_server_and_tls_mode(self):
+        workflow = Path(__file__).with_name(".github").joinpath(
+            "workflows", "weather-alert.yml"
+        ).read_text(encoding="utf-8")
+        script = textwrap.dedent(
+            workflow.rsplit("          python3 - <<'PY'\n", 1)[1]
+            .rsplit("          PY", 1)[0]
+        )
+        for port in (587, 465):
+            with self.subTest(port=port), patch.dict(os.environ, {
+                "SMTP_HOST": "smtp.example.test",
+                "SMTP_PORT": str(port),
+                "SMTP_USERNAME": "sender@example.test",
+                "SMTP_PASSWORD": "test-password",
+                "SMTP_FROM": "sender@example.test",
+                "SMTP_TO": "recipient@example.test",
+            }, clear=True), patch("smtplib.SMTP") as plain, patch("smtplib.SMTP_SSL") as tls:
+                exec(compile(script, "failure-notifier", "exec"), {})
+                selected, unused = (tls, plain) if port == 465 else (plain, tls)
+                unused.assert_not_called()
+                self.assertEqual(selected.call_args.args, ("smtp.example.test", port))
+                smtp = selected.return_value.__enter__.return_value
+                smtp.login.assert_called_once_with("sender@example.test", "test-password")
+                smtp.send_message.assert_called_once()
+                self.assertEqual(smtp.starttls.call_count, int(port != 465))
 
 
 if __name__ == "__main__":

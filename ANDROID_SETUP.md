@@ -1,6 +1,6 @@
 # Android setup
 
-Complete the Gmail secrets and `COORDS_JSON` variable in the [README](README.md) first. Use your **private copy** throughout these instructions.
+Complete the email secrets and `COORDS_JSON` variable in the [README](README.md) first. Use your **private copy** throughout these instructions.
 
 ## 1. Create a restricted GitHub token
 

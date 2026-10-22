@@ -58,15 +58,13 @@ jobs:
       - name: Send requested test email
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.send_test_email }}
         env:
-          SMTP_HOST: "smtp.gmail.com"
-          SMTP_PORT: "587"
+          SMTP_HOST: ${{ vars.SMTP_HOST }}
+          SMTP_PORT: ${{ vars.SMTP_PORT || '587' }}
           SMTP_TIMEOUT_SECONDS: "60"
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           SMTP_FROM: ${{ secrets.SMTP_FROM }}
           SMTP_TO: ${{ secrets.SMTP_TO }}
-          SMTP_STARTTLS: "true"
-          SMTP_USE_SSL: "false"
         run: |
           python - <<'PY'
           from datetime import date
@@ -77,7 +75,7 @@ jobs:
               load_smtp_config(),
               date.today(),
               "This is a test of your automated next-day weather alert email.\n\n"
-              "The GitHub Actions workflow and Gmail SMTP delivery are working.\n",
+              "The GitHub Actions workflow and SMTP email delivery are working.\n",
           )
           PY
 
@@ -91,15 +89,13 @@ jobs:
           # Keep using the last location the phone successfully reported. A
           # missed phone update must not suppress the nightly weather check.
           NWS_USER_AGENT: ${{ secrets.NWS_USER_AGENT }}
-          SMTP_HOST: "smtp.gmail.com"
-          SMTP_PORT: "587"
+          SMTP_HOST: ${{ vars.SMTP_HOST }}
+          SMTP_PORT: ${{ vars.SMTP_PORT || '587' }}
           SMTP_TIMEOUT_SECONDS: "60"
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           SMTP_FROM: ${{ secrets.SMTP_FROM }}
           SMTP_TO: ${{ secrets.SMTP_TO }}
-          SMTP_STARTTLS: "true"
-          SMTP_USE_SSL: "false"
           GH_TOKEN: ${{ github.token }}
         run: |
           last_evaluated_date="$(
@@ -146,8 +142,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     env:
-      SMTP_HOST: "smtp.gmail.com"
-      SMTP_PORT: "587"
+      SMTP_HOST: ${{ vars.SMTP_HOST }}
+      SMTP_PORT: ${{ vars.SMTP_PORT || '587' }}
       SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
       SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
       SMTP_FROM: ${{ secrets.SMTP_FROM }}
@@ -217,10 +213,15 @@ jobs:
           for attempt in range(2):
               transfer_started = False
               try:
-                  with smtplib.SMTP(host, port, timeout=60) as smtp:
+                  if port == 465:
+                      connection = smtplib.SMTP_SSL(host, port, timeout=60, context=context)
+                  else:
+                      connection = smtplib.SMTP(host, port, timeout=60)
+                  with connection as smtp:
                       smtp.ehlo()
-                      smtp.starttls(context=context)
-                      smtp.ehlo()
+                      if port != 465:
+                          smtp.starttls(context=context)
+                          smtp.ehlo()
                       smtp.login(username, password)
                       transfer_started = True
                       smtp.send_message(message, from_addr=sender, to_addrs=recipients)

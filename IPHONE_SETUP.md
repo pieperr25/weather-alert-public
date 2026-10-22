@@ -1,6 +1,6 @@
 # iPhone setup
 
-Complete the Gmail secrets and `COORDS_JSON` variable in the [README](README.md) first. Use **your private repository** throughout. Your iPhone sends its location to that repository; the weather workflow reads it and sends email using your Gmail account.
+Complete the email secrets and `COORDS_JSON` variable in the [README](README.md) first. Use **your private repository** throughout. Your iPhone sends its location to that repository; the weather workflow reads it and sends email using your email account.
 
 You need Apple Shortcuts, Location Services, and an internet connection. There is no extra server or paid app.
 
