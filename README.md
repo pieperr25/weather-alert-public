@@ -31,7 +31,7 @@ Then open the **Secrets** tab and add these repository secrets:
 | `SMTP_PASSWORD` | Your SMTP password or app password |
 | `SMTP_FROM` | Your sending email address |
 | `SMTP_TO` | Your receiving email address |
-| `NWS_USER_AGENT` | `daily-weather-alert/1.0 (you@example.com)`, replacing the example with your email |
+| `NWS_USER_AGENT` | `daily-weather-alert/1.0 (you@example.com)` |
 
 The sending and receiving addresses can be the same. Use a sending address your SMTP account is authorized to send from.
 
